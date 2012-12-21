@@ -1,5 +1,4 @@
 from django.core import serializers
-from django.core.serializers.json import DjangoJSONEncoder
 from django.core.urlresolvers import reverse
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.forms.models import modelform_factory
@@ -9,6 +8,7 @@ from django.utils import simplejson
 from django.utils.translation import ugettext as _
 from django.views.generic import View
 
+from .json import DjangoJSONEncoder
 
 class BackboneAPIView(View):
     model = None  # The model to be used for this API definition
