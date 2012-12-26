@@ -2,6 +2,7 @@
 
 import simplejson
 import datetime
+import decimal
 
 from django.utils.timezone import is_aware
 
@@ -11,14 +12,14 @@ class DjangoJSONEncoder(simplejson.JSONEncoder):
     """
 
     def default(self, o):
-        if isinstance(o, datatime.datetime):
+        if isinstance(o, datetime.datetime):
             r = o.isoformat()
             if o.microsecond:
                 r = r[:23] + r[26:]
             if r.endswith('+00:00'):
                 r = r[:-6] + 'Z'
             return r
-        elif isinstance(o, datatime.date):
+        elif isinstance(o, datetime.date):
             return o.isoformat()
         elif isinstance(o, datetime.time):
             if is_aware(o):

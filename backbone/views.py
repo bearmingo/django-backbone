@@ -10,6 +10,8 @@ from django.views.generic import View
 
 from .json import DjangoJSONEncoder
 
+paginator_params = ['$filter', '$top', '$skip', '$orderby', '$format', '_']
+
 class BackboneAPIView(View):
     model = None  # The model to be used for this API definition
     display_fields = []  # Fields to return for read (GET) requests,
@@ -17,6 +19,11 @@ class BackboneAPIView(View):
     form = None  # The form class to be used for adding or editing objects.
     ordering = None  # Ordering used when retrieving the collection
     paginate_by = None  # The max number of objects per page (enables use of the ``page`` GET parameter).
+
+    permit_orderby = []
+    permit_max_top = 20
+    permit_format = ['json']
+    permit_filter = []
 
     def queryset(self, request, **kwargs):
         """
@@ -34,6 +41,8 @@ class BackboneAPIView(View):
         if id:
             obj = get_object_or_404(self.queryset(request, **kwargs), id=id)
             return self.get_object_detail(request, obj)
+        elif request.GET.has_key('_'):
+            return self.get_paginator_collect(request, **kwargs)
         else:
             return self.get_collection(request, **kwargs)
 
@@ -43,6 +52,57 @@ class BackboneAPIView(View):
         """
         data = self.serialize(obj, ['id'] + list(self.display_fields))
         return HttpResponse(self.json_dumps(data), mimetype='application/json')
+
+    def get_paginator_collect(self, request, **kwargs):
+
+        param_format = request.GET.get('$format', None)
+
+        try:
+            param_top   = int(request.GET.get('$top', None))
+            param_skip = int(request.GET.get('$skip', None))
+        except ValueError:
+            return HttpResponseBadRequest('invalid `$skip` or `$top`')
+
+        qs = self.paginator_queryset(request, **kwargs)
+
+        page_by= min(param_top, self.permit_max_top)
+
+        paginator = Paginator(qs, page_by)
+        try:
+            qs = paginator.page((param_skip - 1) / page_by + 1)
+        except PageNotAnInteger:
+            data = _("Invalid `$top` or `$skip` parameter: Not a validte integer")
+            return HttpResponseBadRequest(data)
+        except EmptyPage:
+            data = _("Invalid 'page' parameter: out of range.")
+            return HttpResponseBadRequest(data)
+
+        data = {
+            'count': paginator.count,
+            'num_pages': paginator.num_pages,
+            'd': [self.serialize(obj, ['id'] + list(self.display_fields)) for obj in qs ],
+        }
+
+        return HttpResponse(self.json_dumps(data), mimetype='application/json')
+
+    def paginator_queryset(self, request, **kwargs):
+        """
+        Handle get paginator request
+        """
+        qs = self.queryset(request, **kwargs)
+
+        param_filter = request.GET.get('$filter', None)
+        param_orderby = request.GET.get('$orderby', None)
+
+        if param_orderby in self.permit_orderby:
+            order = kwargs.get('order', 'asc')
+            if order == 'asc':
+                qs = qs.orderby(param_orderby)
+            else:
+                qs = qs.order_by(u'-' + param_orderby)
+
+        return qs
+
 
     def get_collection(self, request, **kwargs):
         """
@@ -80,6 +140,13 @@ class BackboneAPIView(View):
             else:
                 return self.add_object(request)
 
+    def save_form_for_add(self, request, form):
+        """
+        save form when add objec, user can set some other field of model by subclass this function
+        """
+        obj = form.save()
+        return obj
+
     def add_object(self, request):
         """
         Adds an object.
@@ -95,7 +162,7 @@ class BackboneAPIView(View):
             if not self.has_add_permission_for_data(request, form.cleaned_data):
                 return HttpResponseForbidden(_('You do not have permission to perform this action.'))
 
-            obj = form.save()
+            obj = self.save_form_for_add(request, form)
 
             # We return the newly created object's details and a Location header with it's url
             response = self.get_object_detail(request, obj)
