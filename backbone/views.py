@@ -68,8 +68,12 @@ class BackboneAPIView(View):
         page_by= min(param_top, self.permit_max_top)
 
         paginator = Paginator(qs, page_by)
+
+        current_page = (param_skip - 1) / page_by + 1
+        current_page = max(1, min(current_page, paginator.num_pages));
+
         try:
-            qs = paginator.page((param_skip - 1) / page_by + 1)
+            qs = paginator.page(current_page)
         except PageNotAnInteger:
             data = _("Invalid `$top` or `$skip` parameter: Not a validte integer")
             return HttpResponseBadRequest(data)
@@ -81,6 +85,7 @@ class BackboneAPIView(View):
             'count': paginator.count,
             'num_pages': paginator.num_pages,
             'd': [self.serialize(obj, ['id'] + list(self.display_fields)) for obj in qs ],
+            'current': current_page,
         }
 
         return HttpResponse(self.json_dumps(data), mimetype='application/json')
