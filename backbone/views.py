@@ -228,10 +228,12 @@ class BackboneAPIView(View):
             defaults['fields'] = self.fields
         return modelform_factory(self.model, **defaults)(data=data, instance=instance)
 
-    def delete(self, request, id=None):
+    def delete(self, request, id=None, **kwargs):
         """
         Handles delete requests.
         """
+        import pdb
+        pdb.set_trace()
         if id:
             obj = get_object_or_404(self.queryset(request), id=id)
             if not self.has_delete_permission(request, obj):
@@ -325,3 +327,20 @@ class BackboneAPIView(View):
             # Use JS strings to represent Python Decimal instances (ticket #16850)
             params.update({'use_decimal': False})
         return simplejson.dumps(data, cls=DjangoJSONEncoder, **params)
+
+    @classmethod
+    def get_urls(cls):
+        from django.conf.urls.defaults import patterns, url
+
+        app_label = cls.model._meta.app_label
+        module_name = cls.model._meta.module_name
+
+        base_url_name = '%s_%s' % (app_label, module_name)
+
+        urlpatterns = patterns('',
+            url(r'^$', cls.as_view(), name = base_url_name),
+            url(r'^(?P<id>\d+)$', cls.as_view(), name = base_url_name + '_detail'),
+        )
+        return urlpatterns
+
+
